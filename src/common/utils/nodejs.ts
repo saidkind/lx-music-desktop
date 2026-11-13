@@ -66,6 +66,13 @@ export const getFileStats = async(path: string): Promise<fs.Stats | null> => {
   })
 }
 
+/** 音频文件必须可读、非空，且不能是目录。 */
+export const checkReadableFile = async(path: string): Promise<boolean> => {
+  const stats = await getFileStats(path)
+  if (!stats?.isFile() || !stats.size) return false
+  return fs.promises.access(path, fs.constants.R_OK).then(() => true).catch(() => false)
+}
+
 /**
  * 检查路径并创建目录
  * @param path

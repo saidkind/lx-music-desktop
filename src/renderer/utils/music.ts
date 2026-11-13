@@ -1,15 +1,14 @@
-import { checkPath, joinPath, extname, basename, readFile, getFileStats } from '@common/utils/nodejs'
+import { checkPath, checkReadableFile, joinPath, extname, basename, readFile, getFileStats } from '@common/utils/nodejs'
 import { formatPlayTime } from '@common/utils/common'
 import { decodeKrc } from '@common/utils/lyricUtils/kg'
 import { type IAudioMetadata } from 'music-metadata'
 
 export const checkDownloadFileAvailable = async(musicInfo: LX.Download.ListItem, savePath: string): Promise<boolean> => {
-  return musicInfo.isComplate && !/\.ape$/.test(musicInfo.metadata.fileName) &&
-    (await checkPath(musicInfo.metadata.filePath) || await checkPath(joinPath(savePath, musicInfo.metadata.fileName)))
+  return !!await getDownloadFilePath(musicInfo, savePath)
 }
 
 export const checkLocalFileAvailable = async(musicInfo: LX.Music.MusicInfoLocal): Promise<boolean> => {
-  return checkPath(musicInfo.meta.filePath)
+  return !!await getLocalFilePath(musicInfo)
 }
 
 /**
@@ -26,16 +25,16 @@ export const checkMusicFileAvailable = async(musicInfo: LX.Music.MusicInfo | LX.
 }
 
 export const getDownloadFilePath = async(musicInfo: LX.Download.ListItem, savePath: string): Promise<string> => {
-  if (musicInfo.isComplate && !/\.ape$/.test(musicInfo.metadata.fileName)) {
-    if (await checkPath(musicInfo.metadata.filePath)) return musicInfo.metadata.filePath
+  if (musicInfo.isComplate && musicInfo.metadata.fileName && !/\.ape$/i.test(musicInfo.metadata.fileName)) {
+    if (await checkReadableFile(musicInfo.metadata.filePath)) return musicInfo.metadata.filePath
     const path = joinPath(savePath, musicInfo.metadata.fileName)
-    if (await checkPath(path)) return path
+    if (path !== musicInfo.metadata.filePath && await checkReadableFile(path)) return path
   }
   return ''
 }
 
 export const getLocalFilePath = async(musicInfo: LX.Music.MusicInfoLocal): Promise<string> => {
-  return (await checkPath(musicInfo.meta.filePath)) ? musicInfo.meta.filePath : ''
+  return (await checkReadableFile(musicInfo.meta.filePath)) ? musicInfo.meta.filePath : ''
 }
 
 

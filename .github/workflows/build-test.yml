@@ -31,8 +31,8 @@ jobs:
       - name: Eslint check
         run: npm run lint
 
-      - name: Test playback queue and local update policy
-        run: node --test tests/player-queue.test.cjs tests/local-update-policy.test.cjs
+      - name: Test playback and local update policy
+        run: node --test tests/*.test.cjs
 
       - name: Test Build
         run: npm run build

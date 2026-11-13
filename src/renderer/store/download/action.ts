@@ -38,10 +38,15 @@ const runingTask = new Map<string, LX.Download.ListItem>()
 //   downloadList.splice(0, downloadList.length, ...list)
 // }
 
+let downloadListPromise: Promise<LX.Download.ListItem[]> | null = null
 export const getDownloadList = async(): Promise<LX.Download.ListItem[]> => {
-  if (!downloadList.length) {
+  // 播放、预加载和下载页面可能同时请求；空列表也只初始化一次。
+  if (downloadListPromise) return downloadListPromise
+  downloadListPromise = (async() => {
     const list = await downloadTasksGet()
-    for (const downloadInfo of list) {
+    const existingIds = new Set(downloadList.map(item => item.id))
+    const newItems = list.filter(item => !existingIds.has(item.id))
+    for (const downloadInfo of newItems) {
       markRaw(downloadInfo.metadata)
       switch (downloadInfo.status) {
         case DOWNLOAD_STATUS.RUN:
@@ -52,9 +57,13 @@ export const getDownloadList = async(): Promise<LX.Download.ListItem[]> => {
           break
       }
     }
-    arrPush(downloadList, list)
-  }
-  return downloadList
+    arrPush(downloadList, newItems)
+    return downloadList
+  })().catch((err: unknown) => {
+    downloadListPromise = null
+    throw err
+  })
+  return downloadListPromise
 }
 
 const addTasks = async(list: LX.Download.ListItem[]) => {
@@ -375,6 +384,7 @@ const filterTask = (list: LX.Download.ListItem[]) => {
  */
 export const createDownloadTasks = async(list: LX.Music.MusicInfoOnline[], quality: LX.Quality, listId?: string) => {
   if (!list.length) return
+  await getDownloadList()
   const tasks = filterTask(await window.lx.worker.download.createDownloadTasks(list, quality,
     appSetting['download.fileName'],
     toRaw(qualityList.value), listId),
