@@ -1,3 +1,4 @@
+import { queueState } from './queue'
 import { reactive, shallowReactive, ref } from '@common/utils/vueTools'
 
 export interface PlayerMusicInfo {
@@ -41,6 +42,7 @@ export const isShowPlayComment = ref(false)
 export const isShowLrcSelectContent = ref(false)
 
 export const playMusicInfo = shallowReactive<{
+  queueId?: string
   /**
    * 当前播放歌曲的列表 id
    */
@@ -54,11 +56,13 @@ export const playMusicInfo = shallowReactive<{
    */
   isTempPlay: boolean
 }>({
+  queueId: undefined,
   listId: null,
   musicInfo: null,
   isTempPlay: false,
 })
 export const playInfo = shallowReactive<LX.Player.PlayInfo>({
+  playerMusicId: null,
   playIndex: -1,
   playerListId: null,
   playerPlayIndex: -1,
@@ -67,7 +71,8 @@ export const playInfo = shallowReactive<LX.Player.PlayInfo>({
 
 export const playedList = window.lxData.playedList = shallowReactive<LX.Player.PlayMusicInfo[]>([])
 
-export const tempPlayList = shallowReactive<LX.Player.PlayMusicInfo[]>([])
+export { queueState } from './queue'
+export const tempPlayList = queueState.pending
 
 window.lxData.playInfo = playInfo
 window.lxData.playMusicInfo = playMusicInfo

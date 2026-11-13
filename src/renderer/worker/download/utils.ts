@@ -2,7 +2,7 @@ import { DOWNLOAD_STATUS, QUALITYS } from '@common/constants'
 import { filterFileName } from '@common/utils/common'
 import { buildLyrics } from './lrcTool'
 import fs from 'fs'
-import { clipFileNameLength, clipNameLength, formatMusicName } from '@common/utils/tools'
+import { clipFileNameLength, clipNameLength, formatMusicName, getFileExtByQuality } from '@common/utils/tools'
 
 /**
  * 保存歌词文件
@@ -31,22 +31,7 @@ export const saveLrc = async(lrcData: LX.Music.LyricInfo, info: {
   }
 }
 
-export const getExt = (type: string): LX.Download.FileExt => {
-  switch (type) {
-    case 'ape':
-      return 'ape'
-    case 'flac':
-    case 'flac24bit':
-      return 'flac'
-    case 'wav':
-      return 'wav'
-    case '128k':
-    case '192k':
-    case '320k':
-    default:
-      return 'mp3'
-  }
-}
+export const getExt = getFileExtByQuality
 
 /**
  * 获取音乐音质

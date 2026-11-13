@@ -4,9 +4,7 @@ dd
   .p.small
     | 本软件完全免费，代码已开源。开源地址：
     span.hover.underline(:aria-label="$t('setting__click_open')" @click="openUrl('https://github.com/lyswhut/lx-music-desktop#readme')") https://github.com/lyswhut/lx-music-desktop
-  .p.small
-    | 最新版下载地址：
-    span.hover.underline(:aria-label="$t('setting__click_open')" @click="openUrl('https://github.com/lyswhut/lx-music-desktop/releases')") GitHub Releases
+  .p.small {{ $t('setting__update_local_only') }}
   .p.small
     | 软件的常见问题可转至：
     span.hover.underline(:aria-label="$t('setting__click_open')" @click="openUrl('https://lyswhut.github.io/lx-music-doc/desktop/faq')") 桌面版常见问题

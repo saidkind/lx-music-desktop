@@ -2,113 +2,85 @@ import { onBeforeUnmount, watch } from '@common/utils/vueTools'
 import { onTimeupdate, getCurrentTime } from '@renderer/plugins/player'
 import { playProgress } from '@renderer/store/player/playProgress'
 import { musicInfo } from '@renderer/store/player/state'
-// import { getList } from '@renderer/store/utils'
-import { getNextPlayMusicInfo, resetRandomNextMusicInfo } from '@renderer/core/player'
+import { queueState } from '@renderer/store/player/queue'
+import { getNextPlayMusicInfo } from '@renderer/core/player'
 import { getMusicUrl } from '@renderer/core/music'
-import { appSetting } from '@renderer/store/setting'
-
-let audio: HTMLAudioElement
-const initAudio = () => {
-  if (audio) return
-  audio = new Audio()
-  audio.controls = false
-  audio.preload = 'auto'
-  audio.crossOrigin = 'anonymous'
-  audio.muted = true
-  audio.volume = 0
-  audio.autoplay = true
-  audio.addEventListener('playing', () => {
-    audio.pause()
-  })
-}
-const checkMusicUrl = async(url: string): Promise<boolean> => {
-  initAudio()
-  return new Promise((resolve) => {
-    const clear = () => {
-      audio.removeEventListener('error', handleErr)
-      audio.removeEventListener('canplay', handlePlay)
-    }
-    const handleErr = () => {
-      clear()
-      if (audio?.error?.code !== 1) {
-        resolve(false)
-      } else {
-        resolve(true)
-      }
-    }
-    const handlePlay = () => {
-      clear()
-      resolve(true)
-    }
-    audio.addEventListener('error', handleErr)
-    audio.addEventListener('canplay', handlePlay)
-    audio.src = url
-  })
-}
-
-const preloadMusicInfo = {
-  isLoading: false,
-  preProgress: 0,
-  info: null as LX.Player.PlayMusicInfo | null,
-}
-const resetPreloadInfo = () => {
-  preloadMusicInfo.preProgress = 0
-  preloadMusicInfo.info = null
-  preloadMusicInfo.isLoading = false
-}
-const preloadNextMusicUrl = async(curTime: number) => {
-  if (preloadMusicInfo.isLoading || curTime - preloadMusicInfo.preProgress < 3) return
-  preloadMusicInfo.isLoading = true
-  console.log('preload next music url')
-  const info = await getNextPlayMusicInfo()
-  if (info) {
-    preloadMusicInfo.info = info
-    const url = await getMusicUrl({ musicInfo: info.musicInfo }).catch(() => '')
-    if (url) {
-      console.log('preload url', url)
-      const result = await checkMusicUrl(url)
-      if (!result) {
-        const url = await getMusicUrl({ musicInfo: info.musicInfo, isRefresh: true }).catch(() => '')
-        void checkMusicUrl(url)
-        console.log('preload url refresh', url)
-      }
-    }
-  }
-  preloadMusicInfo.isLoading = false
-}
 
 export default () => {
-  const setProgress = (time: number) => {
-    if (!musicInfo.id) return
-    preloadMusicInfo.preProgress = time
-  }
+  let generation = 0
+  const state = { loading: false, prepared: false }
+  let lastAttempt = -Infinity
+  let cancelCheck: (() => void) | null = null
 
-  const handleSetPlayInfo = () => {
-    resetPreloadInfo()
-  }
-
-  watch(() => appSetting['player.togglePlayMethod'], () => {
-    if (!preloadMusicInfo.info || preloadMusicInfo.info.isTempPlay) return
-    resetRandomNextMusicInfo()
-    preloadMusicInfo.info = null
-    preloadMusicInfo.preProgress = playProgress.nowPlayTime
-  })
-
-  window.app_event.on('setProgress', setProgress)
-  window.app_event.on('musicToggled', handleSetPlayInfo)
-
-  const rOnTimeupdate = onTimeupdate(() => {
-    const time = getCurrentTime()
-    const duration = playProgress.maxPlayTime
-    if (duration > 10 && duration - time < 10 && !preloadMusicInfo.info) {
-      void preloadNextMusicUrl(time)
+  const checkMusicUrl = async(url: string): Promise<boolean> => new Promise(resolve => {
+    const audio = new Audio()
+    audio.preload = 'auto'
+    audio.crossOrigin = 'anonymous'
+    audio.muted = true
+    const finish = (result: boolean) => {
+      clearTimeout(timer)
+      audio.removeEventListener('error', onError)
+      audio.removeEventListener('canplay', onReady)
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
+      cancelCheck = null
+      resolve(result)
     }
+    const onReady = () => { finish(true) }
+    const onError = () => { finish(false) }
+    const timer = setTimeout(onError, 8000)
+    cancelCheck = () => { finish(false) }
+    audio.addEventListener('error', onError)
+    audio.addEventListener('canplay', onReady)
+    audio.src = url
   })
 
+  const reset = () => {
+    generation++
+    cancelCheck?.()
+    state.loading = false
+    state.prepared = false
+    lastAttempt = -Infinity
+  }
 
+  const preload = async() => {
+    if (state.loading || state.prepared || performance.now() - lastAttempt < 3000) return
+    const version = generation
+    state.loading = true
+    lastAttempt = performance.now()
+    try {
+      const info = await getNextPlayMusicInfo()
+      if (!info || version !== generation) return
+      let url = await getMusicUrl({ musicInfo: info.musicInfo }).catch(() => '')
+      if (!url || version !== generation) return
+      let valid = await checkMusicUrl(url)
+      if (version !== generation) return
+      if (!valid) {
+        url = await getMusicUrl({ musicInfo: info.musicInfo, isRefresh: true }).catch(() => '')
+        if (!url || version !== generation) return
+        valid = await checkMusicUrl(url)
+      }
+      if (version === generation) state.prepared = valid
+    } catch {
+      // Preloading is best-effort; playback will resolve and report failures itself.
+    } finally {
+      if (version === generation) state.loading = false
+    }
+  }
+
+  watch(() => queueState.revision, reset, { flush: 'sync' })
+  window.app_event.on('setProgress', reset)
+  window.app_event.on('musicToggled', reset)
+  const removeTimeupdate = onTimeupdate(() => {
+    if (window.lx.isPlayedStop || !musicInfo.id) return
+    const remaining = playProgress.maxPlayTime - getCurrentTime()
+    if (playProgress.maxPlayTime > 10 && remaining > 0 && remaining < 10) void preload()
+  })
   onBeforeUnmount(() => {
-    rOnTimeupdate()
-    window.app_event.off('setProgress', setProgress)
-    window.app_event.off('musicToggled', handleSetPlayInfo)
+    reset()
+    removeTimeupdate()
+    window.app_event.off('setProgress', reset)
+    window.app_event.off('musicToggled', reset)
   })
 }

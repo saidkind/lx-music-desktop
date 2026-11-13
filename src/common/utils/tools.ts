@@ -154,3 +154,20 @@ export const formatMusicName = (format: string, name: string, singer: string) =>
   // return format.replace(/歌名|歌手/g, match => match === '歌名' ? name : singer)
   return format.replace('歌手', singer).replace('歌名', name)
 }
+
+export const getFileExtByQuality = (quality: LX.Quality): LX.Download.FileExt => {
+  switch (quality) {
+    case 'ape':
+      return 'ape'
+    case 'flac':
+    case 'flac24bit':
+      return 'flac'
+    case 'wav':
+      return 'wav'
+    case '128k':
+    case '192k':
+    case '320k':
+    default:
+      return 'mp3'
+  }
+}

@@ -46,13 +46,8 @@ const options = {
   extraResources: [
     './licenses',
   ],
-  publish: [
-    {
-      provider: 'github',
-      owner: 'lyswhut',
-      repo: 'lx-music-desktop',
-    },
-  ],
+  // null also prevents electron-builder from deriving an update feed from repository metadata.
+  publish: null,
 }
 /**
  * @type {import('electron-builder').Configuration}
@@ -267,12 +262,12 @@ const createTarget = {
  * @param {'win' | 'mac' | 'linux' | 'dir'} target 构建目标平台
  * @param {'x86_64' | 'x64' | 'x86' | 'arm64' | 'armv7l'} arch 包架构
  * @param {*} packageType 包类型
- * @param {'onTagOrDraft' | 'always' | 'never'} publishType 发布类型
  */
-const build = async(target, arch, packageType, publishType) => {
+const build = async(target, arch, packageType) => {
   if (target == 'dir') {
     await builder.build({
       dir: true,
+      publish: 'never',
       config: { ...options, ...winOptions, ...linuxOptions, ...macOptions },
     })
     return
@@ -281,7 +276,7 @@ const build = async(target, arch, packageType, publishType) => {
   // Promise is returned
   await builder.build({
     ...targetInfo.buildOptions,
-    publish: publishType ?? 'never',
+    publish: 'never',
     x64: arch == 'x64' || arch == 'x86_64',
     ia32: arch == 'x86' || arch == 'x86_64',
     arm64: arch == 'arm64',
@@ -306,6 +301,7 @@ for (const param of process.argv.slice(2)) {
 if (params.target == null) throw new Error('Missing target')
 if (params.target != 'dir' && params.arch == null) throw new Error('Missing arch')
 if (params.target != 'dir' && params.type == null) throw new Error('Missing type')
+if (params.publish && params.publish !== 'never') throw new Error('This local build does not publish releases. Compile and install it manually.')
 
 console.log(params.target, params.arch, params.type, params.publish ?? '')
-build(params.target, params.arch, params.type, params.publish)
+build(params.target, params.arch, params.type)

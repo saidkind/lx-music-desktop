@@ -74,12 +74,12 @@ declare global {
       'common.transparentWindow': boolean
 
       /**
-       * 尝试自动更新
+       * 旧版自动更新配置，仅用于兼容设置导入，本地编译版不使用
        */
       'common.tryAutoUpdate': boolean
 
       /**
-       * 更新版本后是否显示变更日志
+       * 旧版更新日志配置，仅用于兼容设置导入，本地编译版不使用
        */
       'common.showChangeLog': boolean
 

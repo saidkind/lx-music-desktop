@@ -20,8 +20,9 @@ module.exports = async(context) => {
 
   // 创建APP语言包文件
   return Promise.all(
-    Object.entries(macLanguagesInfoPlistStrings).map(([lang, config]) => {
+    Object.entries(macLanguagesInfoPlistStrings).map(async([lang, config]) => {
       let infos = Object.entries(config).map(([k, v]) => `"${k}" = "${v}";`).join('\n')
+      await fs.mkdir(`${resPath}/${lang}.lproj`, { recursive: true })
       return fs.writeFile(`${resPath}/${lang}.lproj/InfoPlist.strings`, infos)
     }),
   )

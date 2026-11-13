@@ -9,11 +9,13 @@ import {
   downloadList,
 } from './state'
 import { markRaw, toRaw } from '@common/utils/vueTools'
-import { getMusicUrl, getPicUrl, getLyricInfo } from '@renderer/core/music/online'
+import { getMusicUrl, getPicUrl, getLyricInfo, getResolvedMusicUrl } from '@renderer/core/music/online'
 import { appSetting } from '../setting'
 import { qualityList } from '..'
 import { proxyCallback } from '@renderer/worker/utils'
 import { arrPush, arrUnshift, joinPath } from '@renderer/utils'
+import { filterFileName } from '@common/utils/common'
+import { clipFileNameLength, clipNameLength, formatMusicName, getFileExtByQuality } from '@common/utils/tools'
 import { DOWNLOAD_STATUS } from '@common/constants'
 import { proxy } from '../index'
 import { buildSavePath } from './utils'
@@ -75,6 +77,20 @@ const setStatusText = (downloadInfo: LX.Download.ListItem, text: string) => { //
 
 const setUrl = (downloadInfo: LX.Download.ListItem, url: string) => {
   downloadInfo.metadata.url = url
+  throttleUpdateTask([downloadInfo])
+}
+
+/**
+ * 同步实际下载音质，避免换源回退后仍使用原音质对应的扩展名
+ */
+const setQuality = (downloadInfo: LX.Download.ListItem, quality: LX.Quality) => {
+  // 已经写入部分数据时不再变更音质，否则续传会与文件内容不匹配
+  if (downloadInfo.downloaded > 0 || downloadInfo.metadata.quality === quality) return
+  const ext = getFileExtByQuality(quality)
+  const musicInfo = downloadInfo.metadata.musicInfo
+  downloadInfo.metadata.quality = quality
+  downloadInfo.metadata.ext = ext
+  downloadInfo.metadata.fileName = filterFileName(`${clipFileNameLength(formatMusicName(appSetting['download.fileName'], musicInfo.name, clipNameLength(musicInfo.singer)))}.${ext}`)
   throttleUpdateTask([downloadInfo])
 }
 
@@ -205,48 +221,51 @@ const downloadLyric = (downloadInfo: LX.Download.ListItem) => {
   })
 }
 
+const getPlaybackUrl = (downloadInfo: LX.Download.ListItem, isRefresh: boolean) => {
+  const resolved = getResolvedMusicUrl(downloadInfo.metadata.musicInfo)
+  if (!resolved) return ''
+  // 刷新链接时如果音质不同，任务文件已经按原音质创建，不能再切换
+  if (isRefresh && resolved.quality !== downloadInfo.metadata.quality) return ''
+  setQuality(downloadInfo, resolved.quality)
+  return resolved.url
+}
 const getUrl = async(downloadInfo: LX.Download.ListItem, isRefresh: boolean = false) => {
+  const onResolved = (quality: LX.Quality) => {
+    setQuality(downloadInfo, quality)
+  }
   let toggleMusicInfo = downloadInfo.metadata.musicInfo.meta.toggleMusicInfo
   return (toggleMusicInfo ? getMusicUrl({
     musicInfo: toggleMusicInfo,
     isRefresh,
     quality: downloadInfo.metadata.quality,
     allowToggleSource: false,
+    onResolved,
+    saveResolvedUrl: false,
   }) : Promise.reject(new Error('not found'))).catch(() => {
     return getMusicUrl({
       musicInfo: downloadInfo.metadata.musicInfo,
-      isRefresh: false,
+      isRefresh,
       quality: downloadInfo.metadata.quality,
       allowToggleSource: appSetting['download.isUseOtherSource'],
+      onResolved,
+      saveResolvedUrl: false,
     })
-  }).catch(() => '')
+  }).catch(() => getPlaybackUrl(downloadInfo, isRefresh)).catch(() => '')
 }
 const handleRefreshUrl = (downloadInfo: LX.Download.ListItem) => {
   setStatusText(downloadInfo, window.i18n.t('download_status_error_refresh_url'))
-  let toggleMusicInfo = downloadInfo.metadata.musicInfo.meta.toggleMusicInfo
-  ;(toggleMusicInfo ? getMusicUrl({
-    musicInfo: toggleMusicInfo,
-    isRefresh: true,
-    quality: downloadInfo.metadata.quality,
-    allowToggleSource: false,
-  }) : Promise.reject(new Error('not found'))).catch(() => {
-    return getMusicUrl({
-      musicInfo: downloadInfo.metadata.musicInfo,
-      isRefresh: true,
-      quality: downloadInfo.metadata.quality,
-      allowToggleSource: appSetting['download.isUseOtherSource'],
-    })
-  })
-    .catch(() => '')
-    .then(url => {
+  void getUrl(downloadInfo, true).then(url => {
     // commit('setStatusText', { downloadInfo, text: '链接刷新成功' })
-      setUrl(downloadInfo, url)
-      void window.lx.worker.download.updateUrl(downloadInfo.id, url)
-    })
-    .catch(err => {
-      console.log(err)
-      handleError(downloadInfo, err.message)
-    })
+    if (!url) {
+      handleError(downloadInfo, window.i18n.t('download_status_error_url_failed'))
+      return
+    }
+    setUrl(downloadInfo, url)
+    void window.lx.worker.download.updateUrl(downloadInfo.id, url)
+  }).catch(err => {
+    console.log(err)
+    handleError(downloadInfo, err.message)
+  })
 }
 const handleError = (downloadInfo: LX.Download.ListItem, message?: string) => {
   setStatus(downloadInfo, DOWNLOAD_STATUS.ERROR, message)

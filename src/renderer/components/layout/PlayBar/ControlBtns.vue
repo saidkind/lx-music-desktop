@@ -16,6 +16,7 @@
     </button>
     <common-volume-btn />
     <common-toggle-play-mode-btn />
+    <QueueButton />
     <common-list-add-modal v-model:show="isShowAddMusicTo" :music-info="playMusicInfo.musicInfo" />
   </div>
 </template>
@@ -25,8 +26,10 @@ import { ref } from '@common/utils/vueTools'
 import useToggleDesktopLyric from '@renderer/utils/compositions/useToggleDesktopLyric'
 import { musicInfo, playMusicInfo } from '@renderer/store/player/state'
 import { appSetting } from '@renderer/store/setting'
+import QueueButton from '../PlayQueue/QueueButton.vue'
 
 export default {
+  components: { QueueButton },
   setup() {
     const isShowAddMusicTo = ref(false)
     const {

@@ -38,12 +38,39 @@ export const setPic = (datas: {
  */
 
 
-export const getMusicUrl = async({ musicInfo, quality, isRefresh, allowToggleSource = true, onToggleSource = () => {} }: {
+const resolvedUrlCache = new Map<string, { url: string, quality: LX.Quality, time: number }>()
+const RESOLVED_URL_CACHE_TTL = 10 * 60 * 1000
+const RESOLVED_URL_CACHE_MAX = 30
+
+const setResolvedUrl = (musicInfo: LX.Music.MusicInfoOnline, url: string, quality: LX.Quality) => {
+  resolvedUrlCache.delete(musicInfo.id)
+  resolvedUrlCache.set(musicInfo.id, { url, quality, time: Date.now() })
+  if (resolvedUrlCache.size > RESOLVED_URL_CACHE_MAX) {
+    resolvedUrlCache.delete(resolvedUrlCache.keys().next().value!)
+  }
+}
+
+/**
+ * 获取播放时刚解析成功的地址，供下载复用，避免“能播但不能下载”。
+ */
+export const getResolvedMusicUrl = (musicInfo: LX.Music.MusicInfo): { url: string, quality: LX.Quality } | null => {
+  const info = resolvedUrlCache.get(musicInfo.id)
+  if (!info) return null
+  if (Date.now() - info.time > RESOLVED_URL_CACHE_TTL) {
+    resolvedUrlCache.delete(musicInfo.id)
+    return null
+  }
+  return { url: info.url, quality: info.quality }
+}
+
+export const getMusicUrl = async({ musicInfo, quality, isRefresh, allowToggleSource = true, onToggleSource = () => {}, onResolved = () => {}, saveResolvedUrl = true }: {
   musicInfo: LX.Music.MusicInfoOnline
   quality?: LX.Quality
   isRefresh: boolean
   allowToggleSource?: boolean
   onToggleSource?: (musicInfo?: LX.Music.MusicInfoOnline) => void
+  onResolved?: (quality: LX.Quality) => void
+  saveResolvedUrl?: boolean
 }): Promise<string> => {
   // if (!musicInfo._types[type]) {
   //   // 兼容旧版酷我源搜索列表过滤128k音质的bug
@@ -53,11 +80,20 @@ export const getMusicUrl = async({ musicInfo, quality, isRefresh, allowToggleSou
   // }
   const targetQuality = quality ?? getPlayQuality(appSetting['player.playQuality'], musicInfo)
   const cachedUrl = await getStoreMusicUrl(musicInfo, targetQuality)
-  if (cachedUrl && !isRefresh) return cachedUrl
+  if (cachedUrl && !isRefresh) {
+    if (saveResolvedUrl) setResolvedUrl(musicInfo, cachedUrl, targetQuality)
+    onResolved(targetQuality)
+    return cachedUrl
+  }
 
-  return handleGetOnlineMusicUrl({ musicInfo, quality, onToggleSource, isRefresh, allowToggleSource }).then(({ url, quality: targetQuality, musicInfo: targetMusicInfo, isFromCache }) => {
-    if (targetMusicInfo.id != musicInfo.id && !isFromCache) void saveMusicUrl(targetMusicInfo, targetQuality, url)
-    void saveMusicUrl(musicInfo, targetQuality, url)
+  return handleGetOnlineMusicUrl({ musicInfo, quality, onToggleSource, isRefresh, allowToggleSource }).then(({ url, quality: resolvedQuality, musicInfo: targetMusicInfo, isFromCache }) => {
+    if (targetMusicInfo.id != musicInfo.id && !isFromCache) void saveMusicUrl(targetMusicInfo, resolvedQuality, url)
+    void saveMusicUrl(musicInfo, resolvedQuality, url)
+    if (saveResolvedUrl) {
+      setResolvedUrl(musicInfo, url, resolvedQuality)
+      if (targetMusicInfo.id != musicInfo.id) setResolvedUrl(targetMusicInfo, url, resolvedQuality)
+    }
+    onResolved(resolvedQuality)
     return url
   })
 }

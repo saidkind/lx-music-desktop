@@ -2,6 +2,7 @@
 declare namespace LX {
   namespace Player {
     interface PlayMusicInfo {
+      queueId?: string
       /**
        * 当前播放歌曲的列表 id
        */
@@ -17,6 +18,7 @@ declare namespace LX {
     }
 
     interface PlayInfo {
+      playerMusicId: string | null
       /**
        * 当前正在播放歌曲 index
        */
@@ -51,6 +53,39 @@ declare namespace LX {
       maxTime: number
       listId: string
       index: number
+    }
+
+    interface QueueItem extends PlayMusicInfo {
+      queueId: string
+    }
+
+    interface QueueAnchor {
+      listId: string | null
+      musicId: string | null
+      index: number
+    }
+
+    interface QueueHistoryItem {
+      info: PlayMusicInfo
+      anchor: QueueAnchor
+    }
+
+    interface RandomQueue {
+      listId: string | null
+      ids: string[]
+    }
+
+    interface QueueSnapshot {
+      random?: RandomQueue
+      version: 1 | 2
+      cycle?: QueueItem[]
+      /** Normal order of pending occurrences; absent in older snapshots. */
+      order?: string[]
+      pending: QueueItem[]
+      current: PlayMusicInfo | null
+      anchor: QueueAnchor
+      time: number
+      duration: number
     }
 
   }

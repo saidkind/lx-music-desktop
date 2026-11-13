@@ -42,7 +42,12 @@ export default ({
         disabled: !itemMenuControl.download,
       },
       {
-        name: t('list__play_later'),
+        name: t('queue__play_next'),
+        action: 'playNext',
+        disabled: !itemMenuControl.playLater,
+      },
+      {
+        name: t('queue__append'),
         action: 'playLater',
         disabled: !itemMenuControl.playLater,
       },
@@ -108,6 +113,9 @@ export default ({
         break
       case 'play':
         handlePlayMusic(index)
+        break
+      case 'playNext':
+        handlePlayMusicLater(index, false, true)
         break
       case 'playLater':
         handlePlayMusicLater(index)

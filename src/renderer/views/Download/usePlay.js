@@ -7,12 +7,12 @@ export default ({ selectedList, list, listAll, removeAllSelect }) => {
     playList(LIST_IDS.DOWNLOAD, listAll.value.indexOf(list.value[index]))
   }
 
-  const handlePlayMusicLater = (index, single) => {
+  const handlePlayMusicLater = (index, single = false, isTop = false) => {
     if (selectedList.value.length && !single) {
-      addTempPlayList(selectedList.value.map(s => ({ listId: LIST_IDS.DOWNLOAD, musicInfo: s })))
+      addTempPlayList(list.value.filter(item => selectedList.value.some(selected => selected.id === item.id)).map(s => ({ isTop, listId: LIST_IDS.DOWNLOAD, musicInfo: s })))
       removeAllSelect()
     } else {
-      addTempPlayList([{ listId: LIST_IDS.DOWNLOAD, musicInfo: list.value[index] }])
+      addTempPlayList([{ isTop, listId: LIST_IDS.DOWNLOAD, musicInfo: list.value[index] }])
     }
   }
 

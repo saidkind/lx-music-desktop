@@ -31,7 +31,7 @@ import useLyric from './useLyric'
 import useVolume from './useVolume'
 import useWatchList from './useWatchList'
 import { HOTKEY_PLAYER } from '@common/hotKey'
-import { playNext, pause, playPrev, togglePlay, collectMusic, uncollectMusic, dislikeMusic } from '@renderer/core/player'
+import { playNext, pause, playPrev, togglePlay, collectMusic, uncollectMusic, dislikeMusic, updateQueuePlayMode } from '@renderer/core/player'
 import usePlaybackRate from './usePlaybackRate'
 import useSoundEffect from './useSoundEffect'
 import useMaxOutputChannelCount from './useMaxOutputChannelCount'
@@ -125,10 +125,11 @@ export default () => {
   }
 
   watch(() => appSetting['player.togglePlayMethod'], newValue => {
+    updateQueuePlayMode()
     // setLoopPlay(newValue == 'singleLoop')
     if (playedList.length) clearPlayedList()
     if (newValue == 'random' && playMusicInfo.musicInfo && !playMusicInfo.isTempPlay) addPlayedList({ ...(playMusicInfo as LX.Player.PlayMusicInfo) })
-  })
+  }, { flush: 'sync' })
 
   // setLoopPlay(appSetting['player.togglePlayMethod'] == 'singleLoop')
 

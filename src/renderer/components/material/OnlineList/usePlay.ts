@@ -33,12 +33,12 @@ export default ({ selectedList, props, removeAllSelect, emit }: {
     }
   }
 
-  const handlePlayMusicLater = (index: number, single: boolean) => {
+  const handlePlayMusicLater = (index: number, single = false, isTop = false) => {
     if (selectedList.value.length && !single) {
-      addTempPlayList(selectedList.value.map(s => ({ listId: LIST_IDS.PLAY_LATER, musicInfo: s })))
+      addTempPlayList(props.list.filter(item => selectedList.value.some(selected => selected.id === item.id)).map(s => ({ isTop, listId: LIST_IDS.PLAY_LATER, musicInfo: s })))
       removeAllSelect()
     } else {
-      addTempPlayList([{ listId: LIST_IDS.PLAY_LATER, musicInfo: props.list[index] }])
+      addTempPlayList([{ isTop, listId: LIST_IDS.PLAY_LATER, musicInfo: props.list[index] }])
     }
   }
 

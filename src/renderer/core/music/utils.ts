@@ -1,3 +1,4 @@
+import { QUALITYS } from '@common/constants'
 import { qualityList } from '@renderer/store'
 import { assertApiSupport } from '@renderer/store/utils'
 import musicSdk from '@renderer/utils/musicSdk'
@@ -234,6 +235,26 @@ export const getPlayQuality = (highQuality: LX.Quality, musicInfo: LX.Music.Musi
   return type
 }
 
+/**
+ * 获取实际可用的音质。下载时如果指定音质不可用，按请求音质逐级向下回退，避免换源后因音质不匹配而失败。
+ * 播放（未指定音质）时仍按播放音质设置选择。
+ */
+export const getTargetQuality = (musicInfo: LX.Music.MusicInfoOnline, quality?: LX.Quality): LX.Quality => {
+  if (!quality) return getPlayQuality(appSetting['player.playQuality'], musicInfo)
+
+  const supportQualitys = qualityList.value[musicInfo.source]
+  const isAvailable = (target: LX.Quality) => !!musicInfo.meta._qualitys[target] && (!supportQualitys || supportQualitys.includes(target))
+
+  if (isAvailable(quality)) return quality
+
+  // QUALITYS 从高到低排列，优先找不高于请求音质的可用音质
+  const lowerQuality = QUALITYS.slice(QUALITYS.indexOf(quality) + 1).find(isAvailable)
+  if (lowerQuality) return lowerQuality
+
+  // 目标源只有更高音质时，退到它可用的最高音质
+  return QUALITYS.find(isAvailable) ?? '128k'
+}
+
 export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggleSource, isRefresh, retryedSource = [] }: {
   musicInfos: LX.Music.MusicInfoOnline[]
   quality?: LX.Quality
@@ -255,7 +276,7 @@ export const getOnlineOtherSourceMusicUrl = async({ musicInfos, quality, onToggl
     if (retryedSource.includes(musicInfo.source)) continue
     retryedSource.push(musicInfo.source)
     if (!assertApiSupport(musicInfo.source)) continue
-    itemQuality = quality ?? getPlayQuality(appSetting['player.playQuality'], musicInfo)
+    itemQuality = getTargetQuality(musicInfo, quality)
     if (!musicInfo.meta._qualitys[itemQuality]) continue
 
     console.log('try toggle to: ', musicInfo.source, musicInfo.name, musicInfo.singer, musicInfo.interval)
@@ -302,7 +323,7 @@ export const handleGetOnlineMusicUrl = async({ musicInfo, quality, onToggleSourc
 }> => {
   if (!await window.lx.apiInitPromise[0]) throw new Error('source init failed')
   // console.log(musicInfo.source)
-  const targetQuality = quality ?? getPlayQuality(appSetting['player.playQuality'], musicInfo)
+  const targetQuality = getTargetQuality(musicInfo, quality)
 
   let reqPromise
   try {

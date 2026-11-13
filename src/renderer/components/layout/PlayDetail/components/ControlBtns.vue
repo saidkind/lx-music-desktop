@@ -18,6 +18,7 @@ div(:class="$style.footerLeftControlBtns")
   common-playback-rate-btn
   common-volume-btn
   common-toggle-play-mode-btn
+  QueueButton
   button(:class="$style.footerLeftControlBtn" :aria-label="$t('player__add_music_to')" @click="isShowAddMusicTo = true")
     svg(version="1.1" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" space="preserve")
       use(xlink:href="#icon-add-2")
@@ -27,6 +28,7 @@ div(:class="$style.footerLeftControlBtns")
 
 <script>
 import { ref } from '@common/utils/vueTools'
+import QueueButton from '../../PlayQueue/QueueButton.vue'
 import { useI18n } from '@renderer/plugins/i18n'
 
 import {
@@ -46,6 +48,7 @@ import { setMediaDeviceId } from '@renderer/plugins/player'
 import { appSetting, saveMediaDeviceId, setEnableAudioVisualization } from '@renderer/store/setting'
 
 export default {
+  components: { QueueButton },
   setup() {
     const t = useI18n()
     // const setting = useRefGetter('setting')

@@ -19,7 +19,8 @@ import { setProgress } from './playProgress'
 import { playNext } from '@renderer/core/player'
 import { LIST_IDS } from '@common/constants'
 import { toRaw } from '@common/utils/vueTools'
-import { arrPush, arrUnshift } from '@common/utils/common'
+import { enqueue, replaceQueue, takeQueueItem, recordPlayback } from '@renderer/core/player/queueModel'
+import { queueState, notifyQueue } from './queue'
 
 
 type PlayerMusicInfoKeys = keyof typeof musicInfo
@@ -86,6 +87,7 @@ export const updatePlayIndex = () => {
   // console.log(indexInfo)
   playInfo.playIndex = indexInfo.playIndex
   playInfo.playerPlayIndex = indexInfo.playerPlayIndex
+  playInfo.playerMusicId = getList(playInfo.playerListId)[indexInfo.playerPlayIndex]?.id ?? null
 
   return indexInfo
 }
@@ -102,20 +104,14 @@ export const getPlayIndex = (listId: string | null, musicInfo: LX.Download.ListI
   let playIndex = -1
   let playerPlayIndex = -1
   if (playerList.length) {
-    playerPlayIndex = Math.min(playInfo.playerPlayIndex, playerList.length - 1)
+    playerPlayIndex = playerList.findIndex(item => item.id === playInfo.playerMusicId)
   }
 
   const list = getList(listId)
   if (list.length && musicInfo) {
     const currentId = musicInfo.id
     playIndex = list.findIndex(m => m.id == currentId)
-    if (!isTempPlay) {
-      if (playIndex < 0) {
-        playerPlayIndex = playerPlayIndex < 1 ? (list.length - 1) : (playerPlayIndex - 1)
-      } else {
-        playerPlayIndex = playIndex
-      }
-    }
+    if (!isTempPlay && playIndex >= 0) playerPlayIndex = playIndex
   }
 
   return {
@@ -173,9 +169,10 @@ const setPlayerMusicInfo = (musicInfo: LX.Music.MusicInfo | LX.Download.ListItem
  * @param musicInfo 歌曲信息
  * @param isTempPlay 是否临时播放
  */
-export const setPlayMusicInfo = (listId: string | null, musicInfo: LX.Download.ListItem | LX.Music.MusicInfo | null, isTempPlay: boolean = false) => {
+export const setPlayMusicInfo = (listId: string | null, musicInfo: LX.Download.ListItem | LX.Music.MusicInfo | null, isTempPlay: boolean = false, recordHistory = true, queueId?: string) => {
   musicInfo = toRaw(musicInfo)
 
+  playMusicInfo.queueId = queueId
   playMusicInfo.listId = listId
   playMusicInfo.musicInfo = musicInfo
   playMusicInfo.isTempPlay = isTempPlay
@@ -187,12 +184,21 @@ export const setPlayMusicInfo = (listId: string | null, musicInfo: LX.Download.L
   if (musicInfo == null) {
     playInfo.playIndex = -1
     playInfo.playerListId = null
+    playInfo.playerMusicId = null
     playInfo.playerPlayIndex = -1
   } else {
     const { playIndex, playerPlayIndex } = getPlayIndex(listId, musicInfo, isTempPlay)
 
     playInfo.playIndex = playIndex
     playInfo.playerPlayIndex = playerPlayIndex
+    if (!isTempPlay) playInfo.playerMusicId = musicInfo.id
+    if (recordHistory) {
+      recordPlayback(queueState, { musicInfo, listId, isTempPlay, queueId }, {
+        listId: playInfo.playerListId,
+        musicId: playInfo.playerMusicId,
+        index: playInfo.playerPlayIndex,
+      })
+    }
     window.app_event.musicToggled()
   }
 }
@@ -225,16 +231,8 @@ export const clearPlayedList = () => {
  * @param list 歌曲列表
  */
 export const addTempPlayList = (list: LX.Player.TempPlayListItem[]) => {
-  const topList: Array<Omit<LX.Player.TempPlayListItem, 'top'>> = []
-  const bottomList = list.filter(({ isTop, ...musicInfo }) => {
-    if (isTop) {
-      topList.push(musicInfo)
-      return false
-    }
-    return true
-  })
-  if (topList.length) arrUnshift(tempPlayList, topList.map(({ musicInfo, listId }) => ({ musicInfo, listId, isTempPlay: true })))
-  if (bottomList.length) arrPush(tempPlayList, bottomList.map(({ musicInfo, listId }) => ({ musicInfo, listId, isTempPlay: true })))
+  enqueue(queueState, list.map(item => ({ ...item, musicInfo: toRaw(item.musicInfo) })), () => crypto.randomUUID())
+  if (list.length) notifyQueue(window.i18n.t('queue__added', { count: list.length }))
 
   if (!playMusicInfo.musicInfo) void playNext()
 }
@@ -243,11 +241,16 @@ export const addTempPlayList = (list: LX.Player.TempPlayListItem[]) => {
  * @param index 歌曲位置
  */
 export const removeTempPlayList = (index: number) => {
-  tempPlayList.splice(index, 1)
+  const item = tempPlayList[index]
+  if (item) {
+    takeQueueItem(queueState, item.queueId)
+    queueState.cycle = queueState.cycle.filter(entry => entry.queueId !== item.queueId)
+  }
 }
 /**
  * 清空稍后播放列表
  */
 export const clearTempPlayeList = () => {
-  tempPlayList.splice(0, tempPlayList.length)
+  replaceQueue(queueState, [])
+  queueState.cycle = []
 }
